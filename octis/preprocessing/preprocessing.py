@@ -257,6 +257,116 @@ class Preprocessing:
             else:
 
                 return Dataset(final_docs, vocabulary=vocabulary, metadata=metadata, labels=final_labels)
+       def preprocess_dataset_from_list(self, documents_list : list, labels_list : list =None, multilabel=False):
+        """
+        preprocess the input dataset
+
+        :param documents_path: path to the documents file. Each row of the file represents a document
+        :type documents_path: str
+        :param labels_path: path to the documents file. Each row of the file represents a label. Its index corresponds
+        to the index of the documents file (default: None)
+        :type labels_path: str
+        :param multilabel: if true, a document is supposed to have more than one label (labels are split by whitespace)
+        :type multilabel: bool
+
+        :return octis.dataset.dataset.Dataset
+        """
+        docs = documents_list
+        if self.num_processes is not None:
+            # with Pool(self.num_processes) as p:
+            #    docs = p.map(self.simple_preprocessing_steps, docs)
+            chunksize = max(1, len(docs) // (self.num_processes * 20))
+            docs_list = process_map(self.simple_preprocessing_steps, docs, max_workers=self.num_processes, chunksize=chunksize)
+        else:
+            docs = list(map(self.simple_preprocessing_steps, tqdm(docs)))
+        if self.lowercase:
+            self.preprocessing_steps.append("lowercase")
+        if self.remove_punctuation:
+            self.preprocessing_steps.append('remove_punctuation')
+        if self.lemmatize:
+            self.preprocessing_steps.append('lemmatize')
+
+        vocabulary = self.filter_words(docs)
+        print("created vocab")
+        print(len(vocabulary))
+        final_docs, final_labels, document_indexes = [], [], []
+        if labels_list is not None:
+            labels = labels_list
+           
+            vocab = set(vocabulary)
+            for i, doc, label in zip(range(len(docs)), docs, labels):
+                new_doc = [w for w in doc.split() if w in vocab]
+                if len(new_doc) > self.min_doc_words:
+                    final_docs.append(new_doc)
+                    final_labels.append(label)
+                    document_indexes.append(i)
+
+            labels_to_remove = set([k for k, v in dict(
+                Counter(final_labels)).items() if v <= 3])
+            if len(labels_to_remove) > 0:
+                docs = final_docs
+                labels = final_labels
+                document_indexes, final_labels, final_docs = [], [], []
+                for i, doc, label in zip(range(len(docs)), docs, labels):
+                    if label not in labels_to_remove:
+                        final_docs.append(doc)
+                        final_labels.append(label)
+                        document_indexes.append(i)
+        else:
+            vocab = set(vocabulary)
+            for i, doc in enumerate(docs):
+                new_doc = [w for w in doc.split() if w in vocab]
+                if len(new_doc) > self.min_doc_words:
+                    final_docs.append(new_doc)
+                    document_indexes.append(i)
+
+        self.preprocessing_steps.append('filter documents with less than ' + str(self.min_doc_words) + " words")
+        if self.verbose:
+            print("words filtering done")
+        metadata = {"total_documents": len(docs), "vocabulary_length": len(vocabulary),
+                    "preprocessing-info": self.preprocessing_steps
+                    # ,"labels": list(set(final_labels)), "total_labels": len(set(final_labels))
+                    }
+        if self.split:
+            if len(final_labels) > 0:
+                train, test, y_train, y_test = train_test_split(
+                    range(len(final_docs)), final_labels, test_size=0.15, random_state=1, shuffle=True)#stratify=final_labels)
+
+                train, validation = train_test_split(train, test_size=3 / 17, random_state=1, shuffle=True)# stratify=y_train)
+
+                partitioned_labels = [final_labels[doc] for doc in train + validation + test]
+                partitioned_corpus = [final_docs[doc] for doc in train + validation + test]
+                document_indexes = [document_indexes[doc] for doc in train + validation + test]
+                metadata["last-training-doc"] = len(train)
+                metadata["last-validation-doc"] = len(validation) + len(train)
+                if self.save_original_indexes:
+                    return Dataset(partitioned_corpus, vocabulary=vocabulary, metadata=metadata,
+                                   labels=partitioned_labels, document_indexes=document_indexes)
+                else:
+                    return Dataset(partitioned_corpus, vocabulary=vocabulary, metadata=metadata,
+                                   labels=partitioned_labels)
+            else:
+                train, test = train_test_split(range(len(final_docs)), test_size=0.15, random_state=1)
+                train, validation = train_test_split(train, test_size=3 / 17, random_state=1)
+
+                metadata["last-training-doc"] = len(train)
+                metadata["last-validation-doc"] = len(validation) + len(train)
+                partitioned_corpus = [final_docs[doc] for doc in train + validation + test]
+                document_indexes = [document_indexes[doc] for doc in train + validation + test]
+                if self.save_original_indexes:
+                    return Dataset(partitioned_corpus, vocabulary=vocabulary, metadata=metadata, labels=final_labels,
+                                   document_indexes=document_indexes)
+                else:
+                    return Dataset(partitioned_corpus, vocabulary=vocabulary, metadata=metadata, labels=final_labels,
+                                   document_indexes=document_indexes)
+        else:
+            if self.save_original_indexes:
+                return Dataset(final_docs, vocabulary=vocabulary, metadata=metadata, labels=final_labels,
+                               document_indexes=document_indexes)
+            else:
+
+                return Dataset(final_docs, vocabulary=vocabulary, metadata=metadata, labels=final_labels)
+
 
     def filter_words(self, docs):
         if self.vocabulary is not None:
