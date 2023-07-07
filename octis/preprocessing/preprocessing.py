@@ -257,7 +257,8 @@ class Preprocessing:
             else:
 
                 return Dataset(final_docs, vocabulary=vocabulary, metadata=metadata, labels=final_labels)
-       def preprocess_dataset_from_list(self, documents_list : list, labels_list : list =None, multilabel=False):
+       
+    def preprocess_dataset_from_list(self, documents_list : list, labels_list : list =None, multilabel=False):
         """
         preprocess the input dataset
 
