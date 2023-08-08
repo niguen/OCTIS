@@ -14,7 +14,7 @@ class Dataset:
     Dataset handles a dataset and offers methods to access, save and edit the dataset data
     """
 
-    def __init__(self, corpus=None, vocabulary=None, labels=None, metadata=None, document_indexes=None):
+    def __init__(self, corpus=None, original_corpus=None, vocabulary=None, labels=None, metadata=None, document_indexes=None):
         """
         Initialize a dataset, parameters are optional
         if you want to load a dataset, initialize this
@@ -27,6 +27,7 @@ class Dataset:
         metadata : metadata of the dataset
         """
         self.__corpus = corpus
+        self.__original_corpus = original_corpus
         self.__vocabulary = vocabulary
         self.__metadata = metadata
         self.__labels = labels
@@ -36,6 +37,9 @@ class Dataset:
 
     def get_corpus(self):
         return self.__corpus
+
+    def get_original_corpus(self):
+        return self.__original_corpus
 
     # Partitioned Corpus getter
     def get_partitioned_corpus(self, use_validation=True):
